@@ -55,12 +55,12 @@ class YTDLSource(discord.PCMVolumeTransformer):
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
 
+# pylint: disable=R0201
 class AntipatiBot(commands.Cog):
     """AntipatiBot's collection of command."""
     def __init__(self, bot):
         self.bot = bot
 
-    # pylint: disable=R0201
     @commands.command()
     async def join(self, ctx, *, channel: discord.VoiceChannel = None):
         """
@@ -75,13 +75,11 @@ class AntipatiBot(commands.Cog):
             return await ctx.voice_client.move_to(channel)
         await channel.connect()
 
-    # pylint: disable=R0201
     @commands.command()
     async def cichero(self, ctx):
         """Great classic."""
         return await self.play(ctx, song_link="https://www.youtube.com/watch?v=DAuPe14li4g")
 
-    # pylint: disable=R0201
     @commands.command()
     async def play(self, ctx, *, song_link: str):
         """Plays a youtube stream given a song link."""
@@ -91,14 +89,12 @@ class AntipatiBot(commands.Cog):
                                   after=lambda e: print('Player error: %s' % e) if e else None)
         await ctx.message.reply(f"Now playing: {player.title}")
 
-    # pylint: disable=R0201
     @commands.command()
     async def stop(self, ctx):
         """Stop playing music and disconnect from the voice channel."""
         if ctx.voice_client is not None:
             await ctx.voice_client.disconnect()
 
-    # pylint: disable=R0201
     @play.before_invoke
     @cichero.before_invoke
     async def ensure_voice(self, ctx):
