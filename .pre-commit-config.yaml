@@ -12,7 +12,11 @@ repos:
     -   id: check-symlinks
     -   id: check-ast
     -   id: trailing-whitespace
--   repo: https://github.com/PyCQA/pylint
-    rev: v2.11.1
+-   repo: local
     hooks:
     -   id: pylint
+        name: pylint
+        entry: pylint --fail-under=8
+        language: system
+        types: [python]
+        require_serial: true
