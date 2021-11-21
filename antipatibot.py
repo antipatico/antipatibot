@@ -4,11 +4,12 @@ import asyncio
 import logging
 import os
 import secrets
+import base64
+import gzip
 
 import discord
 from discord.ext import commands
 import youtube_dl
-
 
 youtube_dl.utils.bug_reports_message = lambda: ''
 
@@ -35,6 +36,7 @@ ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
 class YTDLSource(discord.PCMVolumeTransformer):
     """Youtube source class, which allows the bot to play youtube videos"""
+
     def __init__(self, source, *, data, volume=0.5):
         super().__init__(source, volume)
 
@@ -60,11 +62,23 @@ class YTDLSource(discord.PCMVolumeTransformer):
 # pylint: disable=R0201
 class AntipatiBot(commands.Cog):
     """AntipatiBot's collection of command."""
-    def __init__(self, bot):
+
+    def __init__(self, bot, log):
         self.bot = bot
+        self.log = log
 
     async def cog_command_error(self, ctx, error):
+        message = ctx.message.content.encode()
+        if len(message) > 50:
+            message = gzip.compress(message, mtime=0)
+        message = base64.b64encode(message).decode()
+        error = base64.b64encode(str(error).encode()).decode()
+        self.log.error(f"command_error:{ctx.guild.id}:{ctx.author}:{ctx.command}:{message}:{error}")
         await ctx.message.reply("Invalid command.")
+
+    async def cog_before_invoke(self, ctx):
+        self.log.info(
+            f"command:{ctx.guild.id}:{self.log.sanitize(ctx.author)}:{ctx.author.id}:{ctx.command}")
 
     @commands.command()
     async def join(self, ctx, *, channel: discord.VoiceChannel = None):
@@ -102,14 +116,16 @@ class AntipatiBot(commands.Cog):
 
     @commands.command()
     async def skip(self, ctx):
+        """Skip the song that is currently playing."""
         if ctx.voice_client is not None and ctx.voice_client.is_playing():
             await ctx.voice_client.stop()
 
     @commands.command()
     async def dice(self, ctx, *, sides: int = 20):
+        """Roll an n sided dice"""
         if sides < 1 or sides > 0x1337:
-            return await ctx.message.reply(f"You have been added to a list.")
-        await ctx.message.reply(f"[d{sides}] You rolled a {secrets.randbelow(sides)+1}")
+            return await ctx.message.reply("You have been added to a list.")
+        await ctx.message.reply(f"[d{sides}] You rolled a {secrets.randbelow(sides) + 1}")
 
     @play.before_invoke
     @cichero.before_invoke
@@ -133,13 +149,18 @@ def main():
     log = logging.getLogger("antipatibot")
     bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"), description="AntipatiBot")
 
+    log.sanitize = lambda message: str(message).replace(":", "_")\
+                                               .replace("\r", "\\r")\
+                                               .replace("\n", "\\n")\
+                                               .replace("\t", "\\t")
+
     @bot.event
     async def on_ready():
-        log.info(f"Logged on as {bot.user}")
+        log.info("login: %s", bot.user)
         for guild in bot.guilds:
-            log.info(f"Joined guild: {guild.name}")
+            log.info("joined_guild:%d:%s", guild.id, log.sanitize(guild.name))
 
-    bot.add_cog(AntipatiBot(bot))
+    bot.add_cog(AntipatiBot(bot, log))
     bot.run(os.getenv("ANTIPATIBOT_DISCORD_TOKEN", ""))
 
 
