@@ -95,6 +95,11 @@ class AntipatiBot(commands.Cog):
         if ctx.voice_client is not None:
             await ctx.voice_client.disconnect()
 
+    @commands.command()
+    async def skip(self, ctx):
+        if ctx.voice_client is not None and ctx.voice_client.is_playing():
+            await ctx.voice_client.stop()
+
     @play.before_invoke
     @cichero.before_invoke
     async def ensure_voice(self, ctx):
