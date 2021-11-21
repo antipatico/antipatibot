@@ -73,7 +73,8 @@ class AntipatiBot(commands.Cog):
             message = gzip.compress(message, mtime=0)
         message = base64.b64encode(message).decode()
         error = base64.b64encode(str(error).encode()).decode()
-        self.log.error(f"command_error:{ctx.guild.id}:{ctx.author}:{ctx.command}:{message}:{error}")
+        self.log.error(f"command_error:{ctx.guild.id}:{self.log.sanitize(ctx.author)}:{ctx.command}:"
+                       f"{ctx.author.id}:{message}:{error}")
         await ctx.message.reply("Invalid command.")
 
     async def cog_before_invoke(self, ctx):
@@ -156,7 +157,7 @@ def main():
 
     @bot.event
     async def on_ready():
-        log.info("login: %s", bot.user)
+        log.info("login:%s", bot.user)
         for guild in bot.guilds:
             log.info("joined_guild:%d:%s", guild.id, log.sanitize(guild.name))
 
