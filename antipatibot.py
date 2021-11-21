@@ -127,12 +127,16 @@ class AntipatiBot(commands.Cog):
 
 def main():
     """Entrypoint for antipatibot program"""
-    logging.basicConfig(level=logging.CRITICAL)
+    logging.basicConfig(level=logging.INFO)
+    logging.getLogger("discord").setLevel(logging.WARNING)
+    log = logging.getLogger("antipatibot")
     bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"), description="AntipatiBot")
 
     @bot.event
     async def on_ready():
-        print(f"Logged on as {bot.user}!")
+        log.info(f"Logged on as {bot.user}")
+        for guild in bot.guilds:
+            log.info(f"Joined guild: {guild.name}")
 
     bot.add_cog(AntipatiBot(bot))
     bot.run(os.getenv("ANTIPATIBOT_DISCORD_TOKEN", ""))
