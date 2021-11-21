@@ -62,6 +62,9 @@ class AntipatiBot(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def cog_command_error(self, ctx, error):
+        await ctx.message.reply("Invalid command.")
+
     @commands.command()
     async def join(self, ctx, *, channel: discord.VoiceChannel = None):
         """
