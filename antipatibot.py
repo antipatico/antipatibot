@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+import secrets
 
 import discord
 from discord.ext import commands
@@ -99,6 +100,12 @@ class AntipatiBot(commands.Cog):
     async def skip(self, ctx):
         if ctx.voice_client is not None and ctx.voice_client.is_playing():
             await ctx.voice_client.stop()
+
+    @commands.command()
+    async def dice(self, ctx, *, sides: int = 20):
+        if sides < 1 or sides > 0x1337:
+            return await ctx.message.reply(f"You have been added to a list.")
+        await ctx.message.reply(f"[d{sides}] You rolled a {secrets.randbelow(sides)+1}")
 
     @play.before_invoke
     @cichero.before_invoke
