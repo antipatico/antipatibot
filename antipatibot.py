@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """antipatibot, the smart discord server."""
 import asyncio
 import logging
