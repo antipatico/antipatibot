@@ -10,6 +10,7 @@ class AntipatiBot(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # pylint: disable=R0201
     @commands.command()
     async def join(self, ctx, *, channel: discord.VoiceChannel = None):
         """
@@ -24,23 +25,27 @@ class AntipatiBot(commands.Cog):
             return await ctx.voice_client.move_to(channel)
         await channel.connect()
 
+    # pylint: disable=R0201
     @commands.command()
     async def cichero(self, ctx):
         """Great classic."""
         return await ctx.message.reply(
     "ECCOLO: https://www.youtube.com/watch?v=DAuPe14li4g&list=PLeVDvlKJhCxFR8RzHmcCntoEptM1Tqwkx")
 
+    # pylint: disable=R0201
     @commands.command()
     async def play(self, ctx, *, song: str):
         """Plays a youtube stream given a song link."""
         return await ctx.message.reply(f"{song}")
 
+    # pylint: disable=R0201
     @commands.command()
     async def stop(self, ctx):
         """Stop playing music and disconnect from the voice channel."""
         if ctx.voice_client is not None:
             await ctx.voice_client.disconnect()
 
+    # pylint: disable=R0201
     @play.before_invoke
     async def ensure_voice(self, ctx):
         """Pre-hook used to ensure you the bot is connected to a voice channel before starting to
