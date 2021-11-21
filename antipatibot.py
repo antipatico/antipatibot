@@ -1,8 +1,58 @@
 """antipatibot, the smart discord server."""
+import asyncio
 import logging
 import os
+
 import discord
 from discord.ext import commands
+import youtube_dl
+
+
+youtube_dl.utils.bug_reports_message = lambda: ''
+
+ytdl_format_options = {
+    'format': 'bestaudio/best',
+    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'restrictfilenames': True,
+    'noplaylist': True,
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'auto',
+    'source_address': '0.0.0.0'  # bind to ipv4 since ipv6 addresses cause issues sometimes
+}
+
+ffmpeg_options = {
+    'options': '-vn'
+}
+
+ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+
+
+class YTDLSource(discord.PCMVolumeTransformer):
+    """Youtube source class, which allows the bot to play youtube videos"""
+    def __init__(self, source, *, data, volume=0.5):
+        super().__init__(source, volume)
+
+        self.data = data
+
+        self.title = data.get('title')
+        self.url = data.get('url')
+
+    @classmethod
+    async def from_url(cls, url, *, loop=None, stream=False):
+        """Returns an audio from a youtube link."""
+        loop = loop or asyncio.get_event_loop()
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+
+        if 'entries' in data:
+            # take first item from a playlist
+            data = data['entries'][0]
+
+        filename = data['url'] if stream else ytdl.prepare_filename(data)
+        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
 
 class AntipatiBot(commands.Cog):
@@ -29,14 +79,17 @@ class AntipatiBot(commands.Cog):
     @commands.command()
     async def cichero(self, ctx):
         """Great classic."""
-        return await ctx.message.reply(
-    "ECCOLO: https://www.youtube.com/watch?v=DAuPe14li4g&list=PLeVDvlKJhCxFR8RzHmcCntoEptM1Tqwkx")
+        return await self.play(ctx, song_link="https://www.youtube.com/watch?v=DAuPe14li4g")
 
     # pylint: disable=R0201
     @commands.command()
-    async def play(self, ctx, *, song: str):
+    async def play(self, ctx, *, song_link: str):
         """Plays a youtube stream given a song link."""
-        return await ctx.message.reply(f"{song}")
+        async with ctx.typing():
+            player = await YTDLSource.from_url(song_link, loop=self.bot.loop, stream=True)
+            ctx.voice_client.play(player,
+                                  after=lambda e: print('Player error: %s' % e) if e else None)
+        await ctx.message.reply(f"Now playing: {player.title}")
 
     # pylint: disable=R0201
     @commands.command()
@@ -47,6 +100,7 @@ class AntipatiBot(commands.Cog):
 
     # pylint: disable=R0201
     @play.before_invoke
+    @cichero.before_invoke
     async def ensure_voice(self, ctx):
         """Pre-hook used to ensure you the bot is connected to a voice channel before starting to
         play music."""
