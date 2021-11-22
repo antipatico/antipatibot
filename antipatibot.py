@@ -183,7 +183,10 @@ def main():
             log.info("joined_guild:%d:%s", guild.id, log.sanitize(guild.name))
 
     bot.add_cog(AntipatiBot(bot, log))
-    bot.run(os.getenv("ANTIPATIBOT_DISCORD_TOKEN", ""))
+    try:
+        bot.run(os.getenv("ANTIPATIBOT_DISCORD_TOKEN", ""))
+    except discord.errors.LoginFailure:
+        log.error("invalid_discord_token:Please set a valid discord bot API token.")
 
 
 if __name__ == "__main__":
