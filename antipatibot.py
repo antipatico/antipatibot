@@ -73,8 +73,8 @@ class AntipatiBot(commands.Cog):
             message = gzip.compress(message, mtime=0)
         message = base64.b64encode(message).decode()
         error = base64.b64encode(str(error).encode()).decode()
-        self.log.error(f"command_error:{ctx.guild.id}:{self.log.sanitize(ctx.author)}:{ctx.command}:"
-                       f"{ctx.author.id}:{message}:{error}")
+        self.log.error(f"command_error:{ctx.guild.id}:{self.log.sanitize(ctx.author)}" +
+                       f":{ctx.command}:{ctx.author.id}:{message}:{error}")
         await ctx.message.reply("Invalid command.")
 
     async def cog_before_invoke(self, ctx):
@@ -95,12 +95,12 @@ class AntipatiBot(commands.Cog):
             return await ctx.voice_client.move_to(channel)
         await channel.connect()
 
-    @commands.command()
+    @commands.command(aliases=["cicca"])
     async def cichero(self, ctx):
         """Great classic."""
         return await self.play(ctx, song_link="https://www.youtube.com/watch?v=DAuPe14li4g")
 
-    @commands.command()
+    @commands.command(aliases=["p", "youtube", "yt"])
     async def play(self, ctx, *, song_link: str):
         """Plays a youtube stream given a song link."""
         async with ctx.typing():
@@ -115,18 +115,20 @@ class AntipatiBot(commands.Cog):
         if ctx.voice_client is not None:
             await ctx.voice_client.disconnect()
 
-    @commands.command()
+    @commands.command(aliases=["next"])
     async def skip(self, ctx):
         """Skip the song that is currently playing."""
         if ctx.voice_client is not None and ctx.voice_client.is_playing():
             ctx.voice_client.stop()
 
-    @commands.command()
-    async def dice(self, ctx, *, sides: int = 20):
+    @commands.command(aliases=["die", "roll"])
+    async def dice(self, ctx, *, sides: int = 20, show_sides: bool = True):
         """Roll an n sided dice"""
         if sides < 1 or sides > 0x1337:
             return await ctx.message.reply("You have been added to a list.")
-        await ctx.message.reply(f"[d{sides}] You rolled a {secrets.randbelow(sides) + 1}")
+        await ctx.message.reply(f"[d{sides}]" if show_sides else "" +
+                                f"You rolled a {secrets.randbelow(sides) + 1}")
+
 
     @play.before_invoke
     @cichero.before_invoke
