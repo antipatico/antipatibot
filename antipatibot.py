@@ -184,7 +184,13 @@ def main():
 
     bot.add_cog(AntipatiBot(bot, log))
     try:
-        bot.run(os.getenv("ANTIPATIBOT_DISCORD_TOKEN", ""))
+        discord_api_file = "/antipatibot/discord_token.txt"
+        if os.path.exists(discord_api_file) and os.path.isfile(discord_api_file):
+            with open(discord_api_file) as f:
+                discord_token = f.read().strip("\n\r\t ")
+        else:
+            discord_token = os.getenv("ANTIPATIBOT_DISCORD_TOKEN", "")
+        bot.run(discord_token)
     except discord.errors.LoginFailure:
         log.error("invalid_discord_token:Please set a valid discord bot API token.")
 
