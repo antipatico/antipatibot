@@ -1,1 +1,1 @@
-@docker run -it --rm -u nobody:nogroup antipatibot:latest /usr/local/antipatibot/antipatibot.py
+@docker run --name antipatibot -u nobody:nogroup --volume %cd%:/antipatibot antipatibot:latest /usr/local/antipatibot/antipatibot.py
