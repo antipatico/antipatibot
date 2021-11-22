@@ -126,7 +126,7 @@ class AntipatiBot(commands.Cog):
         """Roll an n sided dice"""
         if sides < 1 or sides > 0x1337:
             return await ctx.message.reply("You have been added to a list.")
-        await ctx.message.reply(f"[d{sides}]" if show_sides else "" +
+        await ctx.message.reply((f"[d{sides}] " if show_sides else "") +
                                 f"You rolled a {secrets.randbelow(sides) + 1}")
 
     @commands.command()
