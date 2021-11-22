@@ -119,7 +119,7 @@ class AntipatiBot(commands.Cog):
     async def skip(self, ctx):
         """Skip the song that is currently playing."""
         if ctx.voice_client is not None and ctx.voice_client.is_playing():
-            await ctx.voice_client.stop()
+            ctx.voice_client.stop()
 
     @commands.command()
     async def dice(self, ctx, *, sides: int = 20):
