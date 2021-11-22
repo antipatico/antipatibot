@@ -129,6 +129,25 @@ class AntipatiBot(commands.Cog):
         await ctx.message.reply(f"[d{sides}]" if show_sides else "" +
                                 f"You rolled a {secrets.randbelow(sides) + 1}")
 
+    @commands.command()
+    async def d6(self, ctx):
+        """Roll a 6-sided dice"""
+        await self.dice(ctx, sides=6, show_sides=False)
+
+    @commands.command()
+    async def d10(self, ctx):
+        """Roll a 10-sided dice"""
+        await self.dice(ctx, sides=10, show_sides=False)
+
+    @commands.command()
+    async def d20(self, ctx):
+        """Roll a 20-sided dice"""
+        await self.dice(ctx, sides=20, show_sides=False)
+
+    @commands.command()
+    async def d100(self, ctx):
+        """Roll a 100-sided dice"""
+        await self.dice(ctx, sides=100, show_sides=False)
 
     @play.before_invoke
     @cichero.before_invoke
