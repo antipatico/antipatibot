@@ -39,9 +39,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
     def __init__(self, source, *, data, volume=0.5):
         super().__init__(source, volume)
-
         self.data = data
-
         self.title = data.get('title')
         self.url = data.get('url')
 
@@ -50,11 +48,9 @@ class YTDLSource(discord.PCMVolumeTransformer):
         """Returns an audio from a youtube link."""
         loop = loop or asyncio.get_event_loop()
         data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
-
         if 'entries' in data:
             # take first item from a playlist
             data = data['entries'][0]
-
         filename = data['url'] if stream else ytdl.prepare_filename(data)
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
@@ -66,6 +62,7 @@ class AntipatiBot(commands.Cog):
     def __init__(self, bot, log):
         self.bot = bot
         self.log = log
+        self.queue = []
 
     async def cog_command_error(self, ctx, error):
         message = ctx.message.content.encode()
@@ -100,20 +97,61 @@ class AntipatiBot(commands.Cog):
         """Great classic."""
         return await self.play(ctx, song_link="https://www.youtube.com/watch?v=DAuPe14li4g")
 
+    async def play_queue(self, ctx, song_link):
+        """Add a song to the queue and starts reproducing it."""
+        self.queue.append(song_link)
+        while len(self.queue) > 0:
+            song_link = self.queue[0]
+            player = await YTDLSource.from_url(song_link, loop=self.bot.loop, stream=True)
+            self.log.debug("queue len: %d, queue: %s", len(self.queue), str(self.queue))
+            flag = asyncio.Event()
+
+            def on_song_end(error):
+                if error is not None:
+                    self.log.error("Player error: %s", error)
+                self.queue.pop(0)
+                self.log.debug("** END queue len: %d, queue: %s", len(self.queue), str(self.queue))
+                flag.set()
+
+            ctx.voice_client.play(player, after=on_song_end)
+            await ctx.send(f"Now playing: {player.title}")
+            await flag.wait()
+
     @commands.command(aliases=["p", "youtube", "yt"])
     async def play(self, ctx, *, song_link: str):
         """Plays a youtube stream given a song link."""
         async with ctx.typing():
-            player = await YTDLSource.from_url(song_link, loop=self.bot.loop, stream=True)
-            ctx.voice_client.play(player,
-                                  after=lambda e: print('Player error: %s' % e) if e else None)
-        await ctx.message.reply(f"Now playing: {player.title}")
+            if len(self.queue) == 0:
+                asyncio.ensure_future(self.play_queue(ctx, song_link))
+                return
+            else:
+                self.log.debug("queue len: %d, queue: %s", len(self.queue), str(self.queue))
+                self.queue.append(song_link)
+                self.log.debug("queue len: %d, queue: %s", len(self.queue), str(self.queue))
+        await ctx.message.reply("Song added to the queue")
 
     @commands.command()
     async def stop(self, ctx):
         """Stop playing music and disconnect from the voice channel."""
+        await self.clear(ctx, reply=False)
+        await self.skip(ctx)
+
+    @commands.command(aliases=["kill", "terminate", "harakiri", "hairottoilcazzo", "costicarryahardpizza"])
+    async def disconnect(self, ctx):
+        await self.clear(ctx, reply=False)
         if ctx.voice_client is not None:
             await ctx.voice_client.disconnect()
+
+    @commands.command()
+    async def clear(self, ctx, *, reply=True):
+        try:
+            self.queue = [next(iter(self.queue))]
+            if reply:
+                await ctx.message.reply("Song queue deleted")
+        except StopIteration:
+            if reply:
+                await ctx.message.reply("Song queue already empty")
+        self.log.debug("CLEAR queue len: %d, queue: %s", len(self.queue), str(self.queue))
 
     @commands.command(aliases=["next"])
     async def skip(self, ctx):
@@ -129,6 +167,7 @@ class AntipatiBot(commands.Cog):
         await ctx.message.reply((f"[d{sides}] " if show_sides else "") +
                                 f"You rolled a {secrets.randbelow(sides) + 1}")
 
+    # pylint: disable=C0103
     @commands.command()
     async def d6(self, ctx):
         """Roll a 6-sided dice"""
@@ -160,8 +199,6 @@ class AntipatiBot(commands.Cog):
             else:
                 await ctx.send("You are not connected to a voice channel.")
                 raise commands.CommandError("Author not connected to a voice channel.")
-        elif ctx.voice_client.is_playing():
-            ctx.voice_client.stop()
 
 
 def main():
@@ -169,6 +206,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("discord").setLevel(logging.WARNING)
     log = logging.getLogger("antipatibot")
+#    log.setLevel(logging.DEBUG)
     bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"), description="AntipatiBot")
 
     log.sanitize = lambda message: str(message).replace(":", "_")\
@@ -186,8 +224,8 @@ def main():
     try:
         discord_api_file = "/antipatibot/discord_token.txt"
         if os.path.exists(discord_api_file) and os.path.isfile(discord_api_file):
-            with open(discord_api_file) as f:
-                discord_token = f.read().strip("\n\r\t ")
+            with open(discord_api_file, encoding='utf8') as file:
+                discord_token = file.read().strip("\n\r\t ")
         else:
             discord_token = os.getenv("ANTIPATIBOT_DISCORD_TOKEN", "")
         bot.run(discord_token)
