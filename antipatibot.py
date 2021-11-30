@@ -62,8 +62,9 @@ class AntipatiBot(commands.Cog):
     def __init__(self, bot, log):
         self.bot = bot
         self.log = log
-        self.queue = asyncio.Queue()
+        self.queue = asyncio.Queue(0x1337)
         self.playing = False
+        self.loop = False
 
     async def cog_command_error(self, ctx, error):
         message = ctx.message.content.encode()
@@ -107,6 +108,11 @@ class AntipatiBot(commands.Cog):
             except asyncio.QueueEmpty:
                 self.playing = False
                 return
+            if self.loop:
+                try:
+                    self.queue.put_nowait(song_link)
+                except asyncio.QueueFull:
+                    pass
             player = await YTDLSource.from_url(song_link, loop=self.bot.loop, stream=True)
             playing_current_song = asyncio.Event()
 
@@ -147,6 +153,7 @@ class AntipatiBot(commands.Cog):
 
     @commands.command(aliases=["kill", "terminate", "harakiri"])
     async def disconnect(self, ctx):
+        """Clear the queue, stop playing music and disconnect from the channel"""
         await self.stop(ctx, reply=False)
         if ctx.voice_client is not None:
             await ctx.voice_client.disconnect()
@@ -156,6 +163,12 @@ class AntipatiBot(commands.Cog):
         """Skip the song that is currently playing."""
         if ctx.voice_client is not None and ctx.voice_client.is_playing():
             ctx.voice_client.stop()
+
+    @commands.command()
+    async def loop(self, ctx):
+        """Toggle the loop functionality"""
+        self.loop = not self.loop
+        await ctx.message.reply(f"Loop {'activated' if self.loop else 'deactivated'}")
 
     @commands.command(aliases=["die", "roll"])
     async def dice(self, ctx, *, sides: int = 20, show_sides: bool = True):
