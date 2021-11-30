@@ -62,7 +62,8 @@ class AntipatiBot(commands.Cog):
     def __init__(self, bot, log):
         self.bot = bot
         self.log = log
-        self.queue = []
+        self.queue = asyncio.Queue()
+        self.playing = False
 
     async def cog_command_error(self, ctx, error):
         message = ctx.message.content.encode()
@@ -97,61 +98,58 @@ class AntipatiBot(commands.Cog):
         """Great classic."""
         return await self.play(ctx, song_link="https://www.youtube.com/watch?v=DAuPe14li4g")
 
-    async def play_queue(self, ctx, song_link):
+    async def play_queue(self, ctx):
         """Add a song to the queue and starts reproducing it."""
-        self.queue.append(song_link)
-        while len(self.queue) > 0:
-            song_link = self.queue[0]
+        self.playing = True
+        while True:
+            try:
+                song_link = self.queue.get_nowait()
+            except asyncio.QueueEmpty:
+                self.playing = False
+                return
             player = await YTDLSource.from_url(song_link, loop=self.bot.loop, stream=True)
-            self.log.debug("queue len: %d, queue: %s", len(self.queue), str(self.queue))
-            flag = asyncio.Event()
+            playing_current_song = asyncio.Event()
 
             def on_song_end(error):
                 if error is not None:
                     self.log.error("Player error: %s", error)
-                self.queue.pop(0)
-                self.log.debug("** END queue len: %d, queue: %s", len(self.queue), str(self.queue))
-                flag.set()
+                playing_current_song.set()
 
             ctx.voice_client.play(player, after=on_song_end)
             await ctx.send(f"Now playing: {player.title}")
-            await flag.wait()
+            await playing_current_song.wait()
 
     @commands.command(aliases=["p", "youtube", "yt"])
     async def play(self, ctx, *, song_link: str):
         """Plays a youtube stream given a song link."""
         async with ctx.typing():
-            if len(self.queue) == 0:
-                asyncio.ensure_future(self.play_queue(ctx, song_link))
+            try:
+                self.queue.put_nowait(song_link)
+            except asyncio.QueueFull:
+                await ctx.message.reply("Song queue is full :(")
                 return
-            else:
-                self.log.debug("queue len: %d, queue: %s", len(self.queue), str(self.queue))
-                self.queue.append(song_link)
-                self.log.debug("queue len: %d, queue: %s", len(self.queue), str(self.queue))
+            if not self.playing:
+                # Music is not playing!
+                asyncio.ensure_future(self.play_queue(ctx))
+                return
         await ctx.message.reply("Song added to the queue")
 
-    @commands.command()
-    async def stop(self, ctx):
-        """Stop playing music and disconnect from the voice channel."""
-        await self.clear(ctx, reply=False)
-        await self.skip(ctx)
+    @commands.command(aliases=["clear", "hairottoilcazzo"])
+    async def stop(self, ctx, *, reply=True):
+        """Clear the queue and stop playing music"""
+        try:
+            while True:
+                self.queue.get_nowait()
+        except asyncio.QueueEmpty:
+            await self.skip(ctx)
+            if reply:
+                await ctx.message.reply("Song queue cleared")
 
-    @commands.command(aliases=["kill", "terminate", "harakiri", "hairottoilcazzo", "costicarryahardpizza"])
+    @commands.command(aliases=["kill", "terminate", "harakiri"])
     async def disconnect(self, ctx):
-        await self.clear(ctx, reply=False)
+        await self.stop(ctx, reply=False)
         if ctx.voice_client is not None:
             await ctx.voice_client.disconnect()
-
-    @commands.command()
-    async def clear(self, ctx, *, reply=True):
-        try:
-            self.queue = [next(iter(self.queue))]
-            if reply:
-                await ctx.message.reply("Song queue deleted")
-        except StopIteration:
-            if reply:
-                await ctx.message.reply("Song queue already empty")
-        self.log.debug("CLEAR queue len: %d, queue: %s", len(self.queue), str(self.queue))
 
     @commands.command(aliases=["next"])
     async def skip(self, ctx):
