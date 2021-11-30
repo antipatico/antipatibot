@@ -10,13 +10,13 @@ RUN apt-get update && \
 
 FROM python:3.10-slim
 ENV DEBIAN_FRONTEND="noninteractive"
-VOLUME /antipatibot
-COPY antipatibot.py requirements.txt /usr/local/antipatibot/
 COPY --from=builder /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
+COPY requirements.txt /usr/local/antipatibot/
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y libopus0 && \
     apt-get clean && \
     python3 -m pip install -r /usr/local/antipatibot/requirements.txt && \
     rm -rf /root/.cache /var/lib/apt/lists
+COPY antipatibot.py /usr/local/antipatibot/
 ENTRYPOINT ["/usr/local/antipatibot/antipatibot.py"]
