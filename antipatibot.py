@@ -171,33 +171,36 @@ class AntipatiBot(commands.Cog):
         await ctx.message.reply(f"Loop {'activated' if self.loop else 'deactivated'}")
 
     @commands.command(aliases=["die", "roll"])
-    async def dice(self, ctx, *, sides: int = 20, show_sides: bool = True):
+    async def dice(self, ctx, n: int = 1, sides: int = 20, show_sides: bool = True):
         """Roll an n sided dice"""
-        if sides < 1 or sides > 0x1337:
+        if sides < 1 or sides > 0x1337 or n < 1 or n > 40:
             return await ctx.message.reply("You have been added to a list.")
-        await ctx.message.reply((f"[d{sides}] " if show_sides else "") +
+        if n == 1:
+            return await ctx.message.reply((f"[d{sides}] " if show_sides else "") +
                                 f"You rolled a {secrets.randbelow(sides) + 1}")
+        rolls = [secrets.randbelow(sides) + 1 for _ in range(n)]
+        return await ctx.message.reply(f"[{n}d{sides}] You rolled {'+'.join([str(r) for r in rolls])} = {sum(rolls)}")
 
     # pylint: disable=C0103
     @commands.command()
-    async def d6(self, ctx):
+    async def d6(self, ctx, n=1):
         """Roll a 6-sided dice"""
-        await self.dice(ctx, sides=6, show_sides=False)
+        await self.dice(ctx, sides=6, n=n, show_sides=False)
 
     @commands.command()
-    async def d10(self, ctx):
+    async def d10(self, ctx, n=1):
         """Roll a 10-sided dice"""
-        await self.dice(ctx, sides=10, show_sides=False)
+        await self.dice(ctx, sides=10, n=n, show_sides=False)
 
     @commands.command()
-    async def d20(self, ctx):
+    async def d20(self, ctx, n=1):
         """Roll a 20-sided dice"""
-        await self.dice(ctx, sides=20, show_sides=False)
+        await self.dice(ctx, sides=20, n=n, show_sides=False)
 
     @commands.command()
-    async def d100(self, ctx):
+    async def d100(self, ctx, n=1):
         """Roll a 100-sided dice"""
-        await self.dice(ctx, sides=100, show_sides=False)
+        await self.dice(ctx, sides=100, n=n, show_sides=False)
 
     @play.before_invoke
     @cichero.before_invoke
