@@ -67,11 +67,7 @@ class AntipatiBot(commands.Cog):
         self.loop = False
 
     async def cog_command_error(self, ctx, error):
-        message = ctx.message.content.encode()
-        if len(message) > 50:
-            message = gzip.compress(message, mtime=0)
-        message = base64.b64encode(message).decode()
-        error = base64.b64encode(str(error).encode()).decode()
+        message = ctx.message.content
         self.log.error(f"command_error:{ctx.guild.id}:{self.log.sanitize(ctx.author)}" +
                        f":{ctx.command}:{ctx.author.id}:{message}:{error}")
         await ctx.message.reply("Invalid command.")
