@@ -74,6 +74,12 @@ class AntipatiBot(commands.Cog):
         self.log.info(
             f"command:{ctx.guild.id}:{self.log.sanitize(ctx.author)}:{ctx.author.id}:{ctx.command}")
 
+    @commands.Cog.listener()
+    async def on_ready(self):
+        self.log.info("login:%s", self.bot.user)
+        for guild in self.bot.guilds:
+            self.log.info("joined_guild:%d:%s", guild.id, self.log.sanitize(guild.name))
+
     @commands.command()
     async def join(self, ctx, *, channel: discord.VoiceChannel = None):
         """
@@ -216,18 +222,12 @@ def main():
     logging.getLogger("discord").setLevel(logging.WARNING)
     log = logging.getLogger("antipatibot")
     #    log.setLevel(logging.DEBUG)
-    bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"), description="AntipatiBot")
+    bot = commands.Bot(command_prefix=commands.when_mentioned_or("."), description="AntipatiBot")
 
     log.sanitize = lambda message: str(message).replace(":", "_") \
         .replace("\r", "\\r") \
         .replace("\n", "\\n") \
         .replace("\t", "\\t")
-
-    @bot.event
-    async def on_ready():
-        log.info("login:%s", bot.user)
-        for guild in bot.guilds:
-            log.info("joined_guild:%d:%s", guild.id, log.sanitize(guild.name))
 
     bot.add_cog(AntipatiBot(bot, log))
     try:
