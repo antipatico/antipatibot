@@ -23,5 +23,5 @@ repos:
         name: pylint
         entry: pylint --fail-under=8
         language: system
-        types: [python]
+        files: ^.*\.py$
         require_serial: true
