@@ -4,8 +4,6 @@ import asyncio
 import logging
 import os
 import secrets
-import base64
-import gzip
 
 import discord
 from discord.ext import commands
@@ -173,9 +171,10 @@ class AntipatiBot(commands.Cog):
             return await ctx.message.reply("You have been added to a list.")
         if n == 1:
             return await ctx.message.reply((f"[d{sides}] " if show_sides else "") +
-                                f"You rolled a {secrets.randbelow(sides) + 1}")
+                                           f"You rolled a {secrets.randbelow(sides) + 1}")
         rolls = [secrets.randbelow(sides) + 1 for _ in range(n)]
-        return await ctx.message.reply(f"[{n}d{sides}] You rolled {'+'.join([str(r) for r in rolls])} = {sum(rolls)}")
+        return await ctx.message.reply(
+            f"[{n}d{sides}] You rolled {'+'.join([str(r) for r in rolls])} = {sum(rolls)}")
 
     # pylint: disable=C0103
     @commands.command()
@@ -216,13 +215,13 @@ def main():
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("discord").setLevel(logging.WARNING)
     log = logging.getLogger("antipatibot")
-#    log.setLevel(logging.DEBUG)
+    #    log.setLevel(logging.DEBUG)
     bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"), description="AntipatiBot")
 
-    log.sanitize = lambda message: str(message).replace(":", "_")\
-                                               .replace("\r", "\\r")\
-                                               .replace("\n", "\\n")\
-                                               .replace("\t", "\\t")
+    log.sanitize = lambda message: str(message).replace(":", "_") \
+        .replace("\r", "\\r") \
+        .replace("\n", "\\n") \
+        .replace("\t", "\\t")
 
     @bot.event
     async def on_ready():
