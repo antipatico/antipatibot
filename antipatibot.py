@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import secrets
+from dataclasses import dataclass
 
 import discord
 from discord.ext import commands
@@ -53,6 +54,17 @@ class YTDLSource(discord.PCMVolumeTransformer):
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
 
+@dataclass()
+class GuildData:
+    """Data associated to each guild."""
+
+    MAX_QUEUE_SIZE = 40
+    lock: asyncio.Lock = asyncio.Lock()
+    task: asyncio.Task = None
+    queue: asyncio.Queue = asyncio.Queue(MAX_QUEUE_SIZE)
+    loop: bool = False
+
+
 # pylint: disable=R0201
 class AntipatiBot(commands.Cog):
     """AntipatiBot's collection of command."""
@@ -60,9 +72,7 @@ class AntipatiBot(commands.Cog):
     def __init__(self, bot, log):
         self.bot = bot
         self.log = log
-        self.queue = asyncio.Queue(0x1337)
-        self.playing = False
-        self.loop = False
+        self.guild_data = dict()
 
     async def cog_command_error(self, ctx, error):
         message = ctx.message.content
@@ -79,11 +89,53 @@ class AntipatiBot(commands.Cog):
         self.log.info("login:%s", self.bot.user)
         for guild in self.bot.guilds:
             self.log.info("joined_guild:%d:%s", guild.id, self.log.sanitize(guild.name))
+            self.guild_data[guild.id] = GuildData()
+
+    async def music_player_loop(self, guild_data: GuildData):
+        self.log.info("music_player_loop() started")
+        while True:
+            try:
+                (song_request, ctx) = await guild_data.queue.get()
+                self.log.info("song request: " + str(song_request))
+                player = await YTDLSource.from_url(song_request, loop=self.bot.loop, stream=True)
+                playing_current_song = asyncio.Event()
+
+                def on_song_end(error):
+                    if error is not None:
+                        self.log.error("Player error: %s", error)
+                    playing_current_song.set()
+
+                ctx.voice_client.play(player, after=on_song_end)
+                await ctx.send(f"Now playing: {player.title}")
+                await playing_current_song.wait()
+
+                if guild_data.loop:
+                    try:
+                        guild_data.queue.put_nowait((song_request, ctx))
+                    except asyncio.QueueFull:
+                        pass
+
+            except asyncio.CancelledError:
+                self.log.info("music_player_loop() killed")
+                return
+            except Exception as e:
+                self.log.warning(f"music_player_loop() uncaught exception: {e}")
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState,
+                                    after: discord.VoiceState):
+        guild_data = self.guild_data[member.guild.id]
+        async with guild_data.lock:
+            if after.channel is not None and after.channel != before.channel and guild_data.task is None:
+                guild_data.task = asyncio.create_task(self.music_player_loop(guild_data))
+            elif after.channel is None and after.channel != before.channel and guild_data.task is not None:
+                guild_data.task.cancel()
+                self.guild_data[member.guild.id] = GuildData()
 
     @commands.command()
     async def join(self, ctx, *, channel: discord.VoiceChannel = None):
         """
-        Either join a given voice channel.
+        Either join a given voice channel or move to the author voice channel.
         If no channel is specified, connect to the user's current voice channel.
         """""
         if channel is None:
@@ -99,57 +151,34 @@ class AntipatiBot(commands.Cog):
         """Great classic."""
         return await self.play(ctx, song_link="https://www.youtube.com/watch?v=DAuPe14li4g")
 
-    async def play_queue(self, ctx):
-        """Add a song to the queue and starts reproducing it."""
-        self.playing = True
-        while True:
-            try:
-                song_link = self.queue.get_nowait()
-            except asyncio.QueueEmpty:
-                self.playing = False
-                return
-            if self.loop:
-                try:
-                    self.queue.put_nowait(song_link)
-                except asyncio.QueueFull:
-                    pass
-            player = await YTDLSource.from_url(song_link, loop=self.bot.loop, stream=True)
-            playing_current_song = asyncio.Event()
-
-            def on_song_end(error):
-                if error is not None:
-                    self.log.error("Player error: %s", error)
-                playing_current_song.set()
-
-            ctx.voice_client.play(player, after=on_song_end)
-            await ctx.send(f"Now playing: {player.title}")
-            await playing_current_song.wait()
+    @commands.command(aliases=["jhon"])
+    async def john(self, ctx):
+        """He truly is."""
+        return await self.play(ctx, song_link="https://www.youtube.com/watch?v=dALcFSyFcXs")
 
     @commands.command(aliases=["p", "youtube", "yt"])
     async def play(self, ctx, *, song_link: str):
-        """Plays a youtube stream given a song link."""
+        """Add youtube song to playlist."""
         async with ctx.typing():
+            guild_data = self.guild_data[ctx.guild.id]
             try:
-                self.queue.put_nowait(song_link)
+                guild_data.queue.put_nowait((song_link, ctx))
             except asyncio.QueueFull:
                 await ctx.message.reply("Song queue is full :(")
                 return
-            if not self.playing:
-                # Music is not playing!
-                asyncio.ensure_future(self.play_queue(ctx))
-                return
         await ctx.message.reply("Song added to the queue")
 
-    @commands.command(aliases=["clear", "hairottoilcazzo"])
+    @commands.command(aliases=["clear", "clean", "hairottoilcazzo"])
     async def stop(self, ctx, *, reply=True):
         """Clear the queue and stop playing music"""
+        guild_data = self.guild_data[ctx.guild.id]
         try:
             while True:
-                self.queue.get_nowait()
+                guild_data.queue.get_nowait()
         except asyncio.QueueEmpty:
             await self.skip(ctx)
             if reply:
-                await ctx.message.reply("Song queue cleared")
+                await ctx.message.reply("Song queue cleared and music stopped")
 
     @commands.command(aliases=["kill", "terminate", "harakiri"])
     async def disconnect(self, ctx):
@@ -167,8 +196,10 @@ class AntipatiBot(commands.Cog):
     @commands.command()
     async def loop(self, ctx):
         """Toggle the loop functionality"""
-        self.loop = not self.loop
-        await ctx.message.reply(f"Loop {'activated' if self.loop else 'deactivated'}")
+        async with ctx.typing():
+            guild_data = self.guild_data[ctx.guild.id]
+            guild_data.loop = not guild_data.loop
+        await ctx.message.reply(f"Loop {'activated' if guild_data.loop else 'deactivated'}")
 
     @commands.command(aliases=["die", "roll"])
     async def dice(self, ctx, n: int = 1, sides: int = 20, show_sides: bool = True):
