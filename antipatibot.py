@@ -182,6 +182,11 @@ class AntipatiBot(commands.Cog):
         return await ctx.message.reply(
             f"[{n}d{sides}] You rolled {'+'.join([str(r) for r in rolls])} = {sum(rolls)}")
 
+    @commands.command()
+    async def d4(self, ctx, n=1):
+        """Roll a 4-sided dice"""
+        await self.dice(ctx, sides=4, n=n, show_sides=False)
+
     # pylint: disable=C0103
     @commands.command()
     async def d6(self, ctx, n=1):
@@ -189,9 +194,19 @@ class AntipatiBot(commands.Cog):
         await self.dice(ctx, sides=6, n=n, show_sides=False)
 
     @commands.command()
+    async def d8(self, ctx, n=1):
+        """Roll a 8-sided dice"""
+        await self.dice(ctx, sides=8, n=n, show_sides=False)
+
+    @commands.command()
     async def d10(self, ctx, n=1):
         """Roll a 10-sided dice"""
         await self.dice(ctx, sides=10, n=n, show_sides=False)
+
+    @commands.command()
+    async def d12(self, ctx, n=1):
+        """Roll a 10-sided dice"""
+        await self.dice(ctx, sides=12, n=n, show_sides=False)
 
     @commands.command()
     async def d20(self, ctx, n=1):
