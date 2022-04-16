@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""antipatibot, the smart discord server."""
+"""antipatibot, discord server."""
 import asyncio
 import logging
 import os
@@ -61,7 +61,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
 class GuildData:
     """Data associated to each guild: song queue, music task and lock."""
 
-    MAX_QUEUE_SIZE = 40
+    MAX_QUEUE_SIZE = 1000
     lock: asyncio.Lock = asyncio.Lock()
     task: asyncio.Task = None
     queue: asyncio.Queue = asyncio.Queue(MAX_QUEUE_SIZE)
