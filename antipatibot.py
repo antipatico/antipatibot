@@ -59,7 +59,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
 @dataclass()
 class GuildData:
-    """Data associated to each guild."""
+    """Data associated to each guild: song queue, music task and lock."""
 
     MAX_QUEUE_SIZE = 40
     lock: asyncio.Lock = asyncio.Lock()
@@ -68,14 +68,14 @@ class GuildData:
     loop: bool = False
 
 
-# pylint: disable=R0201
+# pylint: disable=R0201,R0904
 class AntipatiBot(commands.Cog):
     """AntipatiBot's collection of command."""
 
     def __init__(self, bot, log):
         self.bot = bot
         self.log = log
-        self.guild_data = dict()
+        self.guild_data = {}
 
     async def cog_command_error(self, ctx, error):
         message = ctx.message.content
@@ -89,12 +89,31 @@ class AntipatiBot(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
+        """Triggers when the bot is ready to run, used to log basic information."""
         self.log.info("login:%s", self.bot.user)
         for guild in self.bot.guilds:
             self.log.info("joined_guild:%d:%s", guild.id, self.log.sanitize(guild.name))
             self.guild_data[guild.id] = GuildData()
 
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState,
+                                    after: discord.VoiceState):
+        """Triggers when the bot joins or leaves a voice channel.
+           Starts the music_player_loop for the given guild."""
+        guild_data = self.guild_data[member.guild.id]
+        async with guild_data.lock:
+            if after.channel is not None and \
+                    after.channel != before.channel and \
+                    guild_data.task is None:
+                guild_data.task = asyncio.create_task(self.music_player_loop(guild_data))
+            elif after.channel is None and \
+                    after.channel != before.channel and \
+                    guild_data.task is not None:
+                guild_data.task.cancel()
+                self.guild_data[member.guild.id] = GuildData()
+
     async def music_player_loop(self, guild_data: GuildData):
+        """Task which handles the queue list, cross-guild in theory (wip)."""
         self.log.info("music_player_loop() started")
         while True:
             try:
@@ -111,29 +130,16 @@ class AntipatiBot(commands.Cog):
                 ctx.voice_client.play(player, after=on_song_end)
                 await ctx.send(f"Now playing: {player.title}")
                 await playing_current_song.wait()
-
                 if guild_data.loop:
                     try:
                         guild_data.queue.put_nowait((song_request, ctx))
                     except asyncio.QueueFull:
                         pass
-
             except asyncio.CancelledError:
                 self.log.info("music_player_loop() killed")
                 return
-            except Exception as e:
-                self.log.warning(f"music_player_loop() uncaught exception: {e}")
-
-    @commands.Cog.listener()
-    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState,
-                                    after: discord.VoiceState):
-        guild_data = self.guild_data[member.guild.id]
-        async with guild_data.lock:
-            if after.channel is not None and after.channel != before.channel and guild_data.task is None:
-                guild_data.task = asyncio.create_task(self.music_player_loop(guild_data))
-            elif after.channel is None and after.channel != before.channel and guild_data.task is not None:
-                guild_data.task.cancel()
-                self.guild_data[member.guild.id] = GuildData()
+            except Exception as exception:  # pylint: disable=W0703
+                self.log.warning(f"music_player_loop() uncaught exception: {exception}")
 
     @commands.command()
     async def join(self, ctx, *, channel: discord.VoiceChannel = None):
@@ -152,12 +158,12 @@ class AntipatiBot(commands.Cog):
     @commands.command(aliases=["cicca"])
     async def cichero(self, ctx):
         """Great classic."""
-        return await self.play(ctx, song_link="https://www.youtube.com/watch?v=DAuPe14li4g")
+        return await self.play(ctx, song_request="https://www.youtube.com/watch?v=DAuPe14li4g")
 
     @commands.command(aliases=["jhon"])
     async def john(self, ctx):
         """He truly is."""
-        return await self.play(ctx, song_link="https://www.youtube.com/watch?v=dALcFSyFcXs")
+        return await self.play(ctx, song_request="https://www.youtube.com/watch?v=dALcFSyFcXs")
 
     @commands.command(aliases=["p", "youtube", "yt"])
     async def play(self, ctx, *, song_request: str):
@@ -167,12 +173,13 @@ class AntipatiBot(commands.Cog):
             songs = [ytdl.extract_info(song_request, download=False)]
             if "entries" in songs[0]:
                 # YouTube playlist
-                yt_data = [song for song in songs[0]["entries"]]
+                yt_data = list(song for song in songs[0]["entries"])
             for song in yt_data:
                 try:
                     guild_data.queue.put_nowait((song["url"], ctx))
                 except asyncio.QueueFull:
-                    await ctx.message.reply(f"Song queue is full (Max size: {guild_data.queue.maxsize})")
+                    await ctx.message.reply(
+                        f"Song queue is full (Max size: {guild_data.queue.maxsize})")
                     return
             await ctx.message.reply("Song added to the queue" if len(yt_data) == 1
                                     else f"Added {len(yt_data)} songs to the queue.")
@@ -211,52 +218,52 @@ class AntipatiBot(commands.Cog):
         await ctx.message.reply(f"Loop {'activated' if guild_data.loop else 'deactivated'}")
 
     @commands.command(aliases=["die", "roll"])
-    async def dice(self, ctx, n: int = 1, sides: int = 20, show_sides: bool = True):
+    async def dice(self, ctx, num: int = 1, sides: int = 20, show_sides: bool = True):
         """Roll an n sided dice"""
-        if sides < 1 or sides > 0x1337 or n < 1 or n > 40:
+        if sides < 1 or sides > 0x1337 or num < 1 or num > 40:
             return await ctx.message.reply("You have been added to a list.")
-        if n == 1:
+        if num == 1:
             return await ctx.message.reply((f"[d{sides}] " if show_sides else "") +
                                            f"You rolled a {secrets.randbelow(sides) + 1}")
-        rolls = [secrets.randbelow(sides) + 1 for _ in range(n)]
+        rolls = [secrets.randbelow(sides) + 1 for _ in range(num)]
         return await ctx.message.reply(
-            f"[{n}d{sides}] You rolled {'+'.join([str(r) for r in rolls])} = {sum(rolls)}")
-
-    @commands.command()
-    async def d4(self, ctx, n=1):
-        """Roll a 4-sided dice"""
-        await self.dice(ctx, sides=4, n=n, show_sides=False)
+            f"[{num}d{sides}] You rolled {'+'.join([str(r) for r in rolls])} = {sum(rolls)}")
 
     # pylint: disable=C0103
     @commands.command()
+    async def d4(self, ctx, n=1):
+        """Roll a 4-sided dice"""
+        await self.dice(ctx, sides=4, num=n, show_sides=False)
+
+    @commands.command()
     async def d6(self, ctx, n=1):
         """Roll a 6-sided dice"""
-        await self.dice(ctx, sides=6, n=n, show_sides=False)
+        await self.dice(ctx, sides=6, num=n, show_sides=False)
 
     @commands.command()
     async def d8(self, ctx, n=1):
         """Roll a 8-sided dice"""
-        await self.dice(ctx, sides=8, n=n, show_sides=False)
+        await self.dice(ctx, sides=8, num=n, show_sides=False)
 
     @commands.command()
     async def d10(self, ctx, n=1):
         """Roll a 10-sided dice"""
-        await self.dice(ctx, sides=10, n=n, show_sides=False)
+        await self.dice(ctx, sides=10, num=n, show_sides=False)
 
     @commands.command()
     async def d12(self, ctx, n=1):
         """Roll a 10-sided dice"""
-        await self.dice(ctx, sides=12, n=n, show_sides=False)
+        await self.dice(ctx, sides=12, num=n, show_sides=False)
 
     @commands.command()
     async def d20(self, ctx, n=1):
         """Roll a 20-sided dice"""
-        await self.dice(ctx, sides=20, n=n, show_sides=False)
+        await self.dice(ctx, sides=20, num=n, show_sides=False)
 
     @commands.command()
     async def d100(self, ctx, n=1):
         """Roll a 100-sided dice"""
-        await self.dice(ctx, sides=100, n=n, show_sides=False)
+        await self.dice(ctx, sides=100, num=n, show_sides=False)
 
     @play.before_invoke
     @cichero.before_invoke
