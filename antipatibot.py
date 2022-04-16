@@ -16,7 +16,8 @@ ytdl_format_options = {
     'format': 'bestaudio/best',
     'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
-    'noplaylist': True,
+    'noplaylist': False,
+    'extract_flat': 'in_playlist',  # don't extract stream urls / thumbnails # ... for playlists.
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': False,
@@ -48,7 +49,9 @@ class YTDLSource(discord.PCMVolumeTransformer):
         loop = loop or asyncio.get_event_loop()
         data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
         if 'entries' in data:
-            # take first item from a playlist
+            # Take first item from a playlist.
+            # This should never happen, since we handle this in the play command,
+            # but better safe than sorry.
             data = data['entries'][0]
         filename = data['url'] if stream else ytdl.prepare_filename(data)
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
@@ -157,16 +160,22 @@ class AntipatiBot(commands.Cog):
         return await self.play(ctx, song_link="https://www.youtube.com/watch?v=dALcFSyFcXs")
 
     @commands.command(aliases=["p", "youtube", "yt"])
-    async def play(self, ctx, *, song_link: str):
+    async def play(self, ctx, *, song_request: str):
         """Add youtube song to playlist."""
         async with ctx.typing():
             guild_data = self.guild_data[ctx.guild.id]
-            try:
-                guild_data.queue.put_nowait((song_link, ctx))
-            except asyncio.QueueFull:
-                await ctx.message.reply("Song queue is full :(")
-                return
-        await ctx.message.reply("Song added to the queue")
+            songs = [ytdl.extract_info(song_request, download=False)]
+            if "entries" in songs[0]:
+                # YouTube playlist
+                yt_data = [song for song in songs[0]["entries"]]
+            for song in yt_data:
+                try:
+                    guild_data.queue.put_nowait((song["url"], ctx))
+                except asyncio.QueueFull:
+                    await ctx.message.reply(f"Song queue is full (Max size: {guild_data.queue.maxsize})")
+                    return
+            await ctx.message.reply("Song added to the queue" if len(yt_data) == 1
+                                    else f"Added {len(yt_data)} songs to the queue.")
 
     @commands.command(aliases=["clear", "clean", "hairottoilcazzo"])
     async def stop(self, ctx, *, reply=True):
@@ -251,6 +260,7 @@ class AntipatiBot(commands.Cog):
 
     @play.before_invoke
     @cichero.before_invoke
+    @john.before_invoke
     async def ensure_voice(self, ctx):
         """Pre-hook used to ensure you the bot is connected to a voice channel before starting to
         play music."""
