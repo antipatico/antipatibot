@@ -182,7 +182,7 @@ class AntipatiBot(commands.Cog):
                         f"Song queue is full (Max size: {guild_data.queue.maxsize})")
                     return
             await ctx.message.reply("Song added to the queue" if len(songs) == 1
-                                    else f"Added {len(yt_data)} songs to the queue.")
+                                    else f"Added {len(songs)} songs to the queue.")
 
     @commands.command(aliases=["clear", "clean", "hairottoilcazzo"])
     async def stop(self, ctx, *, reply=True):
