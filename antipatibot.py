@@ -173,15 +173,15 @@ class AntipatiBot(commands.Cog):
             songs = [ytdl.extract_info(song_request, download=False)]
             if "entries" in songs[0]:
                 # YouTube playlist
-                yt_data = list(song for song in songs[0]["entries"])
-            for song in yt_data:
+                songs = list(song for song in songs[0]["entries"])
+            for song in songs:
                 try:
                     guild_data.queue.put_nowait((song["url"], ctx))
                 except asyncio.QueueFull:
                     await ctx.message.reply(
                         f"Song queue is full (Max size: {guild_data.queue.maxsize})")
                     return
-            await ctx.message.reply("Song added to the queue" if len(yt_data) == 1
+            await ctx.message.reply("Song added to the queue" if len(songs) == 1
                                     else f"Added {len(yt_data)} songs to the queue.")
 
     @commands.command(aliases=["clear", "clean", "hairottoilcazzo"])
