@@ -285,7 +285,8 @@ def main():
     logging.getLogger("discord").setLevel(logging.WARNING)
     log = logging.getLogger("antipatibot")
     #    log.setLevel(logging.DEBUG)
-    bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"), description="AntipatiBot")
+    command_prefix = os.getenv("ANTIPATIBOT_COMMAND_PREFIX", "!")
+    bot = commands.Bot(command_prefix=commands.when_mentioned_or(command_prefix), description="AntipatiBot")
 
     log.sanitize = lambda message: str(message).replace(":", "_") \
         .replace("\r", "\\r") \
