@@ -58,23 +58,37 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
 
 @dataclass()
+class BotSettings:
+    """Bot settings associated to each antipatibot instance."""
+
+    discord_token: str = os.getenv("ANTIPATIBOT_DISCORD_TOKEN", "")
+    command_prefix: str = os.getenv("ANTIPATIBOT_COMMAND_PREFIX", "!")
+    max_queue_size: int = int(os.getenv("ANTIPATIBOT_MAX_QUEUE_SIZE", "1000"))
+    idle_timeout: int = int(os.getenv("ANTIPATIBOT_IDLE_TIMEOUT", "300"))
+
+
+@dataclass()
 class GuildData:
     """Data associated to each guild: song queue, music task and lock."""
 
-    MAX_QUEUE_SIZE = 1000
     lock: asyncio.Lock = asyncio.Lock()
+    queue: asyncio.Queue = None
     task: asyncio.Task = None
-    queue: asyncio.Queue = asyncio.Queue(MAX_QUEUE_SIZE)
     loop: bool = False
+
+    def __init__(self, max_queue_size: int, task: asyncio.Task = None):
+        self.task = task
+        self.queue = asyncio.Queue(max_queue_size)
 
 
 # pylint: disable=R0201,R0904
 class AntipatiBot(commands.Cog):
     """AntipatiBot's collection of command."""
 
-    def __init__(self, bot, log):
+    def __init__(self, bot, log, settings: BotSettings):
         self.bot = bot
         self.log = log
+        self.settings = settings
         self.guild_data = {}
 
     async def cog_command_error(self, ctx, error):
@@ -93,7 +107,7 @@ class AntipatiBot(commands.Cog):
         self.log.info("login:%s", self.bot.user)
         for guild in self.bot.guilds:
             self.log.info("joined_guild:%d:%s", guild.id, self.log.sanitize(guild.name))
-            self.guild_data[guild.id] = GuildData()
+            self.guild_data[guild.id] = GuildData(self.settings.max_queue_size)
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState,
@@ -110,14 +124,15 @@ class AntipatiBot(commands.Cog):
                     after.channel != before.channel and \
                     guild_data.task is not None:
                 guild_data.task.cancel()
-                self.guild_data[member.guild.id] = GuildData()
+                self.guild_data[member.guild.id] = GuildData(self.settings.max_queue_size)
 
     async def music_player_loop(self, guild_data: GuildData):
         """Task which handles the queue list, cross-guild in theory (wip)."""
         self.log.info("music_player_loop() started")
         while True:
             try:
-                (song_request, ctx) = await guild_data.queue.get()
+                (song_request, ctx) = \
+                    await asyncio.wait_for(guild_data.queue.get(), self.settings.idle_timeout)
                 self.log.info("song request: " + str(song_request))
                 player = await YTDLSource.from_url(song_request, loop=self.bot.loop, stream=True)
                 playing_current_song = asyncio.Event()
@@ -137,6 +152,12 @@ class AntipatiBot(commands.Cog):
                         pass
             except asyncio.CancelledError:
                 self.log.info("music_player_loop() killed")
+                return
+            except asyncio.TimeoutError:
+                self.log.info("music_player_loop() timeout")
+                voice = discord.utils.get(self.bot.voice_clients)
+                if voice is not None:
+                    await voice.disconnect()
                 return
             except Exception as exception:  # pylint: disable=W0703
                 self.log.warning(f"music_player_loop() uncaught exception: {exception}")
@@ -285,23 +306,22 @@ def main():
     logging.getLogger("discord").setLevel(logging.WARNING)
     log = logging.getLogger("antipatibot")
     #    log.setLevel(logging.DEBUG)
-    command_prefix = os.getenv("ANTIPATIBOT_COMMAND_PREFIX", "!")
-    bot = commands.Bot(command_prefix=commands.when_mentioned_or(command_prefix), description="AntipatiBot")
+    settings = BotSettings()
+    bot = commands.Bot(command_prefix=commands.when_mentioned_or(settings.command_prefix),
+                       description="AntipatiBot")
 
     log.sanitize = lambda message: str(message).replace(":", "_") \
         .replace("\r", "\\r") \
         .replace("\n", "\\n") \
         .replace("\t", "\\t")
 
-    bot.add_cog(AntipatiBot(bot, log))
+    bot.add_cog(AntipatiBot(bot, log, settings))
     try:
         discord_api_file = "/antipatibot/discord_token.txt"
         if os.path.exists(discord_api_file) and os.path.isfile(discord_api_file):
             with open(discord_api_file, encoding='utf8') as file:
-                discord_token = file.read().strip("\n\r\t ")
-        else:
-            discord_token = os.getenv("ANTIPATIBOT_DISCORD_TOKEN", "")
-        bot.run(discord_token)
+                settings.discord_token = file.read().strip("\n\r\t ")
+        bot.run(settings.discord_token)
     except discord.errors.LoginFailure:
         log.error("invalid_discord_token:Please set a valid discord bot API token.")
 
