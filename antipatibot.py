@@ -115,6 +115,7 @@ class AntipatiBot(commands.Cog):
         """Triggers when the bot joins or leaves a voice channel.
            Starts the music_player_loop for the given guild."""
         guild_data = self.guild_data[member.guild.id]
+        # self.bot.user == member
         async with guild_data.lock:
             if after.channel is not None and \
                     after.channel != before.channel and \
@@ -128,7 +129,6 @@ class AntipatiBot(commands.Cog):
 
     async def music_player_loop(self, guild_data: GuildData):
         """Task which handles the queue list, cross-guild in theory (wip)."""
-        self.log.info("music_player_loop() started")
         while True:
             try:
                 (song_request, ctx) = \
@@ -292,12 +292,7 @@ class AntipatiBot(commands.Cog):
     async def ensure_voice(self, ctx):
         """Pre-hook used to ensure you the bot is connected to a voice channel before starting to
         play music."""
-        if ctx.voice_client is None:
-            if ctx.author.voice:
-                await ctx.author.voice.channel.connect()
-            else:
-                await ctx.send("You are not connected to a voice channel.")
-                raise commands.CommandError("Author not connected to a voice channel.")
+        return await self.join(ctx)
 
 
 def main():
