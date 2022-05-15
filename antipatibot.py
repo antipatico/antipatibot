@@ -71,12 +71,14 @@ class BotSettings:
 class GuildData:
     """Data associated to each guild: song queue, music task and lock."""
 
+    guild_id: int = None
     lock: asyncio.Lock = asyncio.Lock()
     queue: asyncio.Queue = None
     task: asyncio.Task = None
     loop: bool = False
 
-    def __init__(self, max_queue_size: int, task: asyncio.Task = None):
+    def __init__(self, guild_id: int, max_queue_size: int, task: asyncio.Task = None):
+        self.guild_id = guild_id
         self.task = task
         self.queue = asyncio.Queue(max_queue_size)
 
@@ -107,7 +109,7 @@ class AntipatiBot(commands.Cog):
         self.log.info("login:%s", self.bot.user)
         for guild in self.bot.guilds:
             self.log.info("joined_guild:%d:%s", guild.id, self.log.sanitize(guild.name))
-            self.guild_data[guild.id] = GuildData(self.settings.max_queue_size)
+            self.guild_data[guild.id] = GuildData(guild.id, self.settings.max_queue_size)
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState,
@@ -125,10 +127,11 @@ class AntipatiBot(commands.Cog):
                     after.channel != before.channel and \
                     guild_data.task is not None:
                 guild_data.task.cancel()
-                self.guild_data[member.guild.id] = GuildData(self.settings.max_queue_size)
+                self.guild_data[member.guild.id] = GuildData(member.guild.id, self.settings.max_queue_size)
 
     async def music_player_loop(self, guild_data: GuildData):
         """Task which handles the queue list, cross-guild in theory (wip)."""
+        self.log.info(f"music_player_loop:{guild_data.guild_id}:start")
         while True:
             try:
                 (song_request, ctx) = \
@@ -151,16 +154,16 @@ class AntipatiBot(commands.Cog):
                     except asyncio.QueueFull:
                         pass
             except asyncio.CancelledError:
-                self.log.info("music_player_loop() killed")
+                self.log.info(f"music_player_loop:{guild_data.guild_id}:cancelled")
                 return
             except asyncio.TimeoutError:
-                self.log.info("music_player_loop() timeout")
-                voice = discord.utils.get(self.bot.voice_clients)
+                self.log.info(f"music_player_loop:{guild_data.guild_id}:timeout")
+                voice = discord.utils.get(self.bot.voice_clients, guild__id=guild_data.guild_id)
                 if voice is not None:
                     await voice.disconnect()
                 return
             except Exception as exception:  # pylint: disable=W0703
-                self.log.warning(f"music_player_loop() uncaught exception: {exception}")
+                self.log.warning(f"music_player_loop:{guild_data.guild_id}:uncaught exception: {exception}")
 
     @commands.command()
     async def join(self, ctx, *, channel: discord.VoiceChannel = None):
