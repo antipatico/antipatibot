@@ -111,23 +111,40 @@ class AntipatiBot(commands.Cog):
             self.log.info("joined_guild:%d:%s", guild.id, self.log.sanitize(guild.name))
             self.guild_data[guild.id] = GuildData(guild.id, self.settings.max_queue_size)
 
+    async def ensure_guild_thread(self, guild_id: int):
+        """Ensure the music_player_loop thread is running for the given guild_id"""
+        guild_data = self.guild_data[guild_id]
+        async with guild_data.lock:
+            if guild_data.task is None:
+                guild_data.task = asyncio.create_task(self.music_player_loop(guild_data))
+
+    async def terminate_guild_thread(self, guild_id: int):
+        """Kill the music_player_loop thread for the given guild_id"""
+        guild_data = self.guild_data[guild_id]
+        async with guild_data.lock:
+            if guild_data.task is not None:
+                guild_data.task.cancel()
+                guild_data.queue = asyncio.Queue(self.settings.max_queue_size)
+                guild_data.loop = False
+                guild_data.task = None
+
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState,
                                     after: discord.VoiceState):
         """Triggers when the bot joins or leaves a voice channel.
            Starts the music_player_loop for the given guild."""
-        guild_data = self.guild_data[member.guild.id]
-        # self.bot.user == member
-        async with guild_data.lock:
-            if after.channel is not None and \
-                    after.channel != before.channel and \
-                    guild_data.task is None:
-                guild_data.task = asyncio.create_task(self.music_player_loop(guild_data))
-            elif after.channel is None and \
-                    after.channel != before.channel and \
-                    guild_data.task is not None:
-                guild_data.task.cancel()
-                self.guild_data[member.guild.id] = GuildData(member.guild.id, self.settings.max_queue_size)
+        guild_id = member.guild.id
+
+        if self.bot.user == member:
+            """Ensure the music_player_loop is alive/dead"""
+            if after.channel is not None:
+                await self.ensure_guild_thread(guild_id)
+            elif after.channel is None:
+                await self.terminate_guild_thread(guild_id)
+        else:
+            """Ensure we are not alone"""
+            # TODO
+            pass
 
     async def music_player_loop(self, guild_data: GuildData):
         """Task which handles the queue list, cross-guild in theory (wip)."""
@@ -176,8 +193,10 @@ class AntipatiBot(commands.Cog):
                 return await ctx.message.reply("You are not connected to a voice channel.")
             channel = ctx.author.voice.channel
         if ctx.voice_client is not None:
-            return await ctx.voice_client.move_to(channel)
-        await channel.connect()
+            await ctx.voice_client.move_to(channel)
+        else:
+            await channel.connect()
+        await self.ensure_guild_thread(ctx.guild.id)
 
     @commands.command(aliases=["cicca"])
     async def cichero(self, ctx):
@@ -292,6 +311,7 @@ class AntipatiBot(commands.Cog):
     @play.before_invoke
     @cichero.before_invoke
     @john.before_invoke
+    @bastardo.before_invoke
     async def ensure_voice(self, ctx):
         """Pre-hook used to ensure you the bot is connected to a voice channel before starting to
         play music."""
