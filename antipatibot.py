@@ -208,6 +208,11 @@ class AntipatiBot(commands.Cog):
         """He truly is."""
         return await self.play(ctx, song_request="https://www.youtube.com/watch?v=dALcFSyFcXs")
 
+    @commands.command()
+    async def bastardo(self, ctx):
+        """Mia mamma è una brava donna, napoletana ma brava"""
+        return await self.play(ctx, song_request="https://www.youtube.com/watch?v=12gmyUCqLxA")
+
     @commands.command(aliases=["p", "youtube", "yt"])
     async def play(self, ctx, *, song_request: str):
         """Add youtube song to playlist."""
