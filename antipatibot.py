@@ -141,12 +141,13 @@ class AntipatiBot(commands.Cog):
                 await self.ensure_guild_thread(guild_id)
             elif after.channel is None:
                 await self.terminate_guild_thread(guild_id)
-        elif len(after.channel.members) < 2:
-            """If we are alone, leave"""
-            voice = discord.utils.get(self.bot.voice_clients, guild__id=after.channel.guild.id)
-            if voice is not None:
+        else:
+            """Terminate when you are left alone on a channel"""
+            voice = discord.utils.get(self.bot.voice_clients, guild__id=guild_id)
+            if voice is not None and len(voice.channel.members) < 2:
+                # FIXME: possible race condition on idle timeout
                 await voice.disconnect()
-            await self.terminate_guild_thread(guild_id)  # FIXME: possible race condition on idle timeout
+                await self.terminate_guild_thread(guild_id)
 
     async def music_player_loop(self, guild_data: GuildData):
         """Task which handles the queue list, cross-guild in theory (wip)."""
